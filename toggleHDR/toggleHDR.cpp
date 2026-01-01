@@ -14,16 +14,16 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM) {
     return TRUE;
 }
 
-int main() {
+void ToggleHDR() {
     UINT32 pc = 0, mc = 0;
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
-        return 1;
+        return;
 
     auto* p = new DISPLAYCONFIG_PATH_INFO[pc];
     auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
 
     if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
-        return 1;
+        return;
 
     auto& t = p[0].targetInfo;
 
@@ -49,5 +49,9 @@ int main() {
 
     delete[] p;
     delete[] m;
+}
+
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    ToggleHDR();
     return 0;
 }
