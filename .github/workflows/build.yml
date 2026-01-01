@@ -1,0 +1,24 @@
+name: Build toggleHDR
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      run: msbuild toggleHDR.sln /p:Configuration=Release /p:Platform=x64
+
+    - name: Upload exe
+      uses: actions/upload-artifact@v4
+      with:
+        name: toggleHDR_patched
+        path: x64/Release/toggleHDR.exe
