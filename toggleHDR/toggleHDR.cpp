@@ -1,49 +1,22 @@
 #include <windows.h>
 #include <shellapi.h>
-#include <tlhelp32.h>
 #include <string.h>
 
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "Shell32.lib")
 
-void KillSystemSettings()
-{
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) return;
-
-    PROCESSENTRY32W pe;
-    pe.dwSize = sizeof(pe);
-
-    if (Process32FirstW(snap, &pe)) {
-        do {
-            if (_wcsicmp(pe.szExeFile, L"SystemSettings.exe") == 0) {
-                HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProc) {
-                    TerminateProcess(hProc, 0);
-                    CloseHandle(hProc);
-                }
-                break;
-            }
-        } while (Process32NextW(snap, &pe));
-    }
-
-    CloseHandle(snap);
-}
-
-int main(int argc, char** argv)
-{
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
     int open_settings = 1;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--no-icc") == 0)
-            open_settings = 0;
+    if (lpCmdLine && strstr(lpCmdLine, "--no-icc")) {
+        open_settings = 0;
     }
 
     UINT32 pathCount = 0, modeCount = 0;
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount) != ERROR_SUCCESS)
         return 1;
 
-    auto* paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-    auto* modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+    DISPLAYCONFIG_PATH_INFO* paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+    DISPLAYCONFIG_MODE_INFO* modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
 
     if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths, &modeCount, modes, nullptr) != ERROR_SUCCESS) {
         delete[] paths;
@@ -64,9 +37,9 @@ int main(int argc, char** argv)
         if (DisplayConfigGetDeviceInfo(&g.header) != ERROR_SUCCESS)
             continue;
 
-        const BOOL turnOn = g.advancedColorEnabled ? FALSE : TRUE;
+        BOOL turnOn = g.advancedColorEnabled ? FALSE : TRUE;
 
-#if defined(DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE)
+#if defined(DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE) && defined(DISPLAYCONFIG_SET_HDR_STATE)
         DISPLAYCONFIG_SET_HDR_STATE s = {};
         s.header.type = static_cast<DISPLAYCONFIG_DEVICE_INFO_TYPE>(
             DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE);
@@ -87,31 +60,7 @@ int main(int argc, char** argv)
 #endif
 
         if (open_settings) {
-            STARTUPINFOW si{};
-            PROCESS_INFORMATION pi{};
-            si.cb = sizeof(si);
-            si.dwFlags = STARTF_USESHOWWINDOW;
-            si.wShowWindow = SW_SHOWMINNOACTIVE;
-
-            wchar_t cmd[] = L"cmd /c start ms-settings:display";
-            CreateProcessW(
-                nullptr,
-                cmd,
-                nullptr,
-                nullptr,
-                FALSE,
-                CREATE_NO_WINDOW,
-                nullptr,
-                nullptr,
-                &si,
-                &pi
-            );
-
-            CloseHandle(pi.hThread);
-            CloseHandle(pi.hProcess);
-
-            Sleep(1500);
-            KillSystemSettings();
+            ShellExecuteA(nullptr, "open", "ms-settings:display", nullptr, nullptr, SW_MINIMIZE);
         }
 
         break;
@@ -120,15 +69,4 @@ int main(int argc, char** argv)
     delete[] paths;
     delete[] modes;
     return 0;
-}
-
-#include <windows.h>
-
-int WINAPI WinMain(
-    HINSTANCE,
-    HINSTANCE,
-    LPSTR,
-    int
-) {
-    return main(__argc, __argv);
 }
