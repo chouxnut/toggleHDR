@@ -1,74 +1,41 @@
 #include <windows.h>
-#include <dwmapi.h>
+#include <shellapi.h>
+#pragma comment(lib,"User32.lib")
+#pragma comment(lib,"Shell32.lib")
 
-#pragma comment(lib, "User32.lib")
-#pragma comment(lib, "Dwmapi.lib")
+static HWINEVENTHOOK h; static bool d;
 
-bool ToggleHDR()
-{
-    UINT32 pathCount = 0, modeCount = 0;
-    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount))
-        return false;
-
-    auto* paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-    auto* modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-
-    if (QueryDisplayConfig(
-        QDC_ONLY_ACTIVE_PATHS,
-        &pathCount, paths,
-        &modeCount, modes,
-        nullptr))
-    {
-        delete[] paths;
-        delete[] modes;
-        return false;
+void CALLBACK W(HWINEVENTHOOK, DWORD e, HWND w, LONG, LONG, DWORD, DWORD){
+    wchar_t c[32]; DWORD p,l=MAX_PATH; wchar_t x[MAX_PATH];
+    if(e!=EVENT_OBJECT_CREATE||d||!w||
+       !GetClassNameW(w,c,32)||wcscmp(c,L"ApplicationFrameWindow")||
+       !GetWindowThreadProcessId(w,&p)) return;
+    HANDLE P=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,0,p);
+    if(P&&QueryFullProcessImageNameW(P,0,x,&l)&&wcsstr(x,L"SystemSettings.exe")){
+        PostMessageW(w,WM_CLOSE,0,0); d=1; UnhookWinEvent(h);
     }
-
-    // 주 디스플레이 기준
-    const auto& target = paths[0].targetInfo;
-
-    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO get{};
-    get.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-    get.header.size = sizeof(get);
-    get.header.adapterId = target.adapterId;
-    get.header.id = target.id;
-
-    if (DisplayConfigGetDeviceInfo(&get.header) != ERROR_SUCCESS) {
-        delete[] paths;
-        delete[] modes;
-        return false;
-    }
-
-    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE set{};
-    set.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-    set.header.size = sizeof(set);
-    set.header.adapterId = target.adapterId;
-    set.header.id = target.id;
-    set.enableAdvancedColor = !get.advancedColorEnabled;
-
-    if (DisplayConfigSetDeviceInfo(&set.header) != ERROR_SUCCESS) {
-        delete[] paths;
-        delete[] modes;
-        return false;
-    }
-
-    // 🔹 즉시 반영 확인
-    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO verify = get;
-    DisplayConfigGetDeviceInfo(&verify.header);
-
-    if (verify.advancedColorEnabled != set.enableAdvancedColor) {
-        // fallback: DWM / 디스플레이 리프레시
-        DwmFlush();
-        ChangeDisplaySettingsEx(nullptr, nullptr, nullptr, 0, nullptr);
-    }
-
-    delete[] paths;
-    delete[] modes;
-    return true;
+    if(P) CloseHandle(P);
 }
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
-{
-    ToggleHDR();
-    return 0;
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int){
+    UINT32 pc=0,mc=0; GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS,&pc,&mc);
+    auto p=new DISPLAYCONFIG_PATH_INFO[pc];
+    auto m=new DISPLAYCONFIG_MODE_INFO[mc];
+    QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS,&pc,p,&mc,m,0);
+    auto&t=p[0].targetInfo;
+
+    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{{DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO,sizeof(g),t.adapterId,t.id}};
+    DisplayConfigGetDeviceInfo(&g.header);
+
+    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{{DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE,sizeof(s),t.adapterId,t.id},!g.advancedColorEnabled};
+    DisplayConfigSetDeviceInfo(&s.header);
+
+    if(s.enableAdvancedColor){
+        d=0;
+        h=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_CREATE,0,W,0,0,
+            WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);
+        ShellExecuteW(0,L"open",L"ms-settings:display",0,0,SW_SHOWMINNOACTIVE);
+        MSG M; while(!d&&GetMessageW(&M,0,0,0)) DispatchMessageW(&M);
+    }
+    delete[] p; delete[] m; return 0;
 }
