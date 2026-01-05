@@ -1,59 +1,81 @@
 #include <windows.h>
 #include <shellapi.h>
-#pragma comment(lib,"User32.lib")
-#pragma comment(lib,"Shell32.lib")
 
-static HWND target;
+#pragma comment(lib, "User32.lib")
+#pragma comment(lib, "Shell32.lib")
 
-BOOL CALLBACK Find(HWND h, LPARAM){
-    wchar_t c[64];
-    GetClassNameW(h,c,64);
-    if(wcscmp(c,L"ApplicationFrameWindow")) return TRUE;
+static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
+{
+    wchar_t cls[64];
+    GetClassNameW(h, cls, 64);
+    if (wcscmp(cls, L"ApplicationFrameWindow"))
+        return TRUE;
 
-    DWORD p; GetWindowThreadProcessId(h,&p);
-    HANDLE P=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,0,p);
-    if(!P) return TRUE;
+    DWORD pid;
+    GetWindowThreadProcessId(h, &pid);
 
-    wchar_t x[MAX_PATH]; DWORD l=MAX_PATH;
-    bool ok = QueryFullProcessImageNameW(P,0,x,&l) &&
-              wcsstr(x,L"SystemSettings.exe");
-    CloseHandle(P);
+    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!p)
+        return TRUE;
 
-    if(ok){ target=h; return FALSE; }
+    wchar_t exe[MAX_PATH];
+    DWORD len = MAX_PATH;
+    BOOL ok = QueryFullProcessImageNameW(p, 0, exe, &len) &&
+              wcsstr(exe, L"SystemSettings.exe");
+
+    CloseHandle(p);
+
+    if (ok) {
+        PostMessageW(h, WM_CLOSE, 0, 0);
+        return FALSE;
+    }
     return TRUE;
 }
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int){
-    UINT32 pc=0,mc=0;
-    GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS,&pc,&mc);
-    auto p=new DISPLAYCONFIG_PATH_INFO[pc];
-    auto m=new DISPLAYCONFIG_MODE_INFO[mc];
-    QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS,&pc,p,&mc,m,0);
-    auto&t=p[0].targetInfo;
+void ToggleHDR()
+{
+    UINT32 pc = 0, mc = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
+        return;
 
-    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{{DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO,sizeof(g),t.adapterId,t.id}};
-    DisplayConfigGetDeviceInfo(&g.header);
+    auto* paths = new DISPLAYCONFIG_PATH_INFO[pc];
+    auto* modes = new DISPLAYCONFIG_MODE_INFO[mc];
 
-    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{{DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE,sizeof(s),t.adapterId,t.id},!g.advancedColorEnabled};
-    DisplayConfigSetDeviceInfo(&s.header);
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths, &mc, modes, nullptr))
+        goto done;
 
-    if(s.enableAdvancedColor){
-        ShellExecuteW(0,L"open",L"ms-settings:display",0,0,SW_SHOWMINNOACTIVE);
+    auto& t = paths[0].targetInfo;
 
-        MSG M;
-        for(int i=0;i<100 && !target;i++){
-            while(PeekMessageW(&M,0,0,0,PM_REMOVE))
-                DispatchMessageW(&M);
-            EnumWindows(Find,0);
-        }
+    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
+    g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+    g.header.size = sizeof(g);
+    g.header.adapterId = t.adapterId;
+    g.header.id = t.id;
 
-        if(target){
-            PostMessageW(target,WM_SYSCOMMAND,SC_CLOSE,0);
-            PostMessageW(target,WM_CLOSE,0,0);
+    if (!DisplayConfigGetDeviceInfo(&g.header)) {
+        DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
+        s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+        s.header.size = sizeof(s);
+        s.header.adapterId = t.adapterId;
+        s.header.id = t.id;
+        s.enableAdvancedColor = !g.advancedColorEnabled;
+        DisplayConfigSetDeviceInfo(&s.header);
+
+        if (s.enableAdvancedColor) {
+            ShellExecuteW(nullptr, L"open", L"ms-settings:display",
+                          nullptr, nullptr, SW_SHOWMINNOACTIVE);
+            Sleep(0);
+            EnumWindows(CloseSettings, 0);
         }
     }
 
-    delete[] p;
-    delete[] m;
+done:
+    delete[] paths;
+    delete[] modes;
+}
+
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+{
+    ToggleHDR();
     return 0;
 }
