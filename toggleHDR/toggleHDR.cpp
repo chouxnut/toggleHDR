@@ -6,10 +6,9 @@
 static HWINEVENTHOOK h; static bool d;
 
 void CALLBACK W(HWINEVENTHOOK, DWORD e, HWND w, LONG, LONG, DWORD, DWORD){
-    wchar_t c[32]; DWORD p,l=MAX_PATH; wchar_t x[MAX_PATH];
-    if(e!=EVENT_OBJECT_CREATE||d||!w||
-       !GetClassNameW(w,c,32)||wcscmp(c,L"ApplicationFrameWindow")||
-       !GetWindowThreadProcessId(w,&p)) return;
+    wchar_t c[32], x[MAX_PATH]; DWORD p,l=MAX_PATH;
+    if(d||!w||!GetClassNameW(w,c,32)||wcscmp(c,L"ApplicationFrameWindow")) return;
+    GetWindowThreadProcessId(w,&p);
     HANDLE P=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,0,p);
     if(P&&QueryFullProcessImageNameW(P,0,x,&l)&&wcsstr(x,L"SystemSettings.exe")){
         PostMessageW(w,WM_CLOSE,0,0); d=1; UnhookWinEvent(h);
@@ -32,8 +31,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int){
 
     if(s.enableAdvancedColor){
         d=0;
-        h=SetWinEventHook(EVENT_OBJECT_CREATE,EVENT_OBJECT_CREATE,0,W,0,0,
-            WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);
+        h=SetWinEventHook(
+            EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW,
+            0, W, 0, 0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
+        );
         ShellExecuteW(0,L"open",L"ms-settings:display",0,0,SW_SHOWMINNOACTIVE);
         MSG M; while(!d&&GetMessageW(&M,0,0,0)) DispatchMessageW(&M);
     }
