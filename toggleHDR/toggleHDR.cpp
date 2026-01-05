@@ -41,8 +41,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int){
         ShellExecuteW(0,L"open",L"ms-settings:display",0,0,SW_SHOWMINNOACTIVE);
 
         MSG M;
-        for(int i=0;i<50 && !target;i++){
-            PeekMessageW(&M,0,0,0,PM_REMOVE);
+        for(int i=0;i<100 && !target;i++){
+            while(PeekMessageW(&M,0,0,0,PM_REMOVE))
+                DispatchMessageW(&M);
             EnumWindows(Find,0);
         }
 
@@ -51,6 +52,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int){
             PostMessageW(target,WM_CLOSE,0,0);
         }
     }
-    delete[] p; delete[] m;
+
+    delete[] p;
+    delete[] m;
     return 0;
 }
