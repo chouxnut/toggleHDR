@@ -8,25 +8,8 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
 {
     wchar_t c[64];
     GetClassNameW(h, c, 64);
-    if (wcscmp(c, L"ApplicationFrameWindow"))
-        return TRUE;
 
-    DWORD pid;
-    GetWindowThreadProcessId(h, &pid);
-
-    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!p)
-        return TRUE;
-
-    wchar_t exe[MAX_PATH];
-    DWORD len = MAX_PATH;
-    BOOL isSettings =
-        QueryFullProcessImageNameW(p, 0, exe, &len) &&
-        wcsstr(exe, L"SystemSettings.exe");
-
-    CloseHandle(p);
-
-    if (isSettings) {
+    if (!wcscmp(c, L"ApplicationFrameWindow")) {
         PostMessageW(h, WM_CLOSE, 0, 0);
         return FALSE;
     }
@@ -36,17 +19,15 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
 void ToggleHDR()
 {
     UINT32 pc = 0, mc = 0;
+
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
         return;
 
     auto* p = new DISPLAYCONFIG_PATH_INFO[pc];
     auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
 
-    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr)) {
-        delete[] p;
-        delete[] m;
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
         return;
-    }
 
     auto& t = p[0].targetInfo;
 
@@ -66,9 +47,11 @@ void ToggleHDR()
         DisplayConfigSetDeviceInfo(&s.header);
     }
 
-    ShellExecuteW(nullptr, L"open",
+    ShellExecuteW(nullptr,
+                  L"open",
                   L"ms-settings:display",
-                  nullptr, nullptr,
+                  nullptr,
+                  nullptr,
                   SW_SHOWMINNOACTIVE);
 
     Sleep(0);
