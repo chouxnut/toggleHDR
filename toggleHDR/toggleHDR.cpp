@@ -35,36 +35,41 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
 void ToggleHDR()
 {
     UINT32 pc = 0, mc = 0;
+    DISPLAYCONFIG_PATH_INFO* paths = nullptr;
+    DISPLAYCONFIG_MODE_INFO* modes = nullptr;
+
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
         return;
 
-    auto* paths = new DISPLAYCONFIG_PATH_INFO[pc];
-    auto* modes = new DISPLAYCONFIG_MODE_INFO[mc];
+    paths = new DISPLAYCONFIG_PATH_INFO[pc];
+    modes = new DISPLAYCONFIG_MODE_INFO[mc];
 
     if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths, &mc, modes, nullptr))
         goto done;
 
-    auto& t = paths[0].targetInfo;
+    DISPLAYCONFIG_TARGET_INFO* t = &paths[0].targetInfo;
 
     DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
     g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
     g.header.size = sizeof(g);
-    g.header.adapterId = t.adapterId;
-    g.header.id = t.id;
+    g.header.adapterId = t->adapterId;
+    g.header.id = t->id;
 
     if (!DisplayConfigGetDeviceInfo(&g.header)) {
         DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
         s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
         s.header.size = sizeof(s);
-        s.header.adapterId = t.adapterId;
-        s.header.id = t.id;
+        s.header.adapterId = t->adapterId;
+        s.header.id = t->id;
         s.enableAdvancedColor = !g.advancedColorEnabled;
         DisplayConfigSetDeviceInfo(&s.header);
 
         if (s.enableAdvancedColor) {
-            ShellExecuteW(nullptr, L"open", L"ms-settings:display",
-                          nullptr, nullptr, SW_SHOWMINNOACTIVE);
-            Sleep(0);
+            ShellExecuteW(nullptr, L"open",
+                          L"ms-settings:display",
+                          nullptr, nullptr,
+                          SW_SHOWMINNOACTIVE);
+            Sleep(350);
             EnumWindows(CloseSettings, 0);
         }
     }
