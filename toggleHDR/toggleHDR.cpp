@@ -16,34 +16,22 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
     return TRUE;
 }
 
-static bool WaitForDisplayReady()
-{
-    for (int i = 0; i < 20; ++i) {
-        UINT32 pc = 0, mc = 0;
-        if (!GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc) && pc > 0)
-            return true;
-        Sleep(500);
-    }
-    return false;
-}
-
 void ToggleHDR()
 {
-    if (!WaitForDisplayReady())
-        return;
-
     UINT32 pc = 0, mc = 0;
+
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
         return;
 
     auto* p = new DISPLAYCONFIG_PATH_INFO[pc];
     auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
 
-    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
-        goto cleanup;
-
     DISPLAYCONFIG_PATH_TARGET_INFO* target = nullptr;
     DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
+    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
+
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
+        goto cleanup;
 
     for (UINT32 i = 0; i < pc; ++i) {
         g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
@@ -61,7 +49,6 @@ void ToggleHDR()
     if (!target)
         goto cleanup;
 
-    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
     s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
     s.header.size = sizeof(s);
     s.header.adapterId = target->adapterId;
@@ -77,7 +64,7 @@ void ToggleHDR()
                   nullptr,
                   SW_SHOWMINNOACTIVE);
 
-    Sleep(1200);
+    Sleep(200);
     EnumWindows(CloseSettings, 0);
 
 cleanup:
