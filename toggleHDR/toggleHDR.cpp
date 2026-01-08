@@ -26,36 +26,26 @@ void ToggleHDR()
     auto* p = new DISPLAYCONFIG_PATH_INFO[pc];
     auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
 
-    DISPLAYCONFIG_PATH_TARGET_INFO* target = nullptr;
-    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
-    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
-
     if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
-        goto cleanup;
+        return;
 
-    for (UINT32 i = 0; i < pc; ++i) {
-        g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-        g.header.size = sizeof(g);
-        g.header.adapterId = p[i].targetInfo.adapterId;
-        g.header.id = p[i].targetInfo.id;
+    auto& t = p[0].targetInfo;
 
-        if (!DisplayConfigGetDeviceInfo(&g.header) &&
-            g.advancedColorSupported) {
-            target = &p[i].targetInfo;
-            break;
-        }
+    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
+    g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+    g.header.size = sizeof(g);
+    g.header.adapterId = t.adapterId;
+    g.header.id = t.id;
+
+    if (!DisplayConfigGetDeviceInfo(&g.header)) {
+        DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
+        s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+        s.header.size = sizeof(s);
+        s.header.adapterId = t.adapterId;
+        s.header.id = t.id;
+        s.enableAdvancedColor = !g.advancedColorEnabled;
+        DisplayConfigSetDeviceInfo(&s.header);
     }
-
-    if (!target)
-        goto cleanup;
-
-    s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-    s.header.size = sizeof(s);
-    s.header.adapterId = target->adapterId;
-    s.header.id = target->id;
-    s.enableAdvancedColor = !g.advancedColorEnabled;
-
-    DisplayConfigSetDeviceInfo(&s.header);
 
     ShellExecuteW(nullptr,
                   L"open",
@@ -64,10 +54,9 @@ void ToggleHDR()
                   nullptr,
                   SW_SHOWMINNOACTIVE);
 
-    Sleep(0);
+    Sleep(1200);
     EnumWindows(CloseSettings, 0);
 
-cleanup:
     delete[] p;
     delete[] m;
 }
