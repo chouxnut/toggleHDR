@@ -54,7 +54,7 @@ void ToggleHDR()
                   nullptr,
                   SW_SHOWMINNOACTIVE);
 
-    Sleep(0);
+    Sleep(200);
     EnumWindows(CloseSettings, 0);
 
     delete[] p;
