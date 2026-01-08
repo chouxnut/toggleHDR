@@ -16,10 +16,23 @@ static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
     return TRUE;
 }
 
+static bool WaitForDisplayReady()
+{
+    for (int i = 0; i < 20; ++i) {
+        UINT32 pc = 0, mc = 0;
+        if (!GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc) && pc > 0)
+            return true;
+        Sleep(500);
+    }
+    return false;
+}
+
 void ToggleHDR()
 {
-    UINT32 pc = 0, mc = 0;
+    if (!WaitForDisplayReady())
+        return;
 
+    UINT32 pc = 0, mc = 0;
     if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
         return;
 
@@ -27,25 +40,35 @@ void ToggleHDR()
     auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
 
     if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
-        return;
+        goto cleanup;
 
-    auto& t = p[0].targetInfo;
-
+    DISPLAYCONFIG_PATH_TARGET_INFO* target = nullptr;
     DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
-    g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-    g.header.size = sizeof(g);
-    g.header.adapterId = t.adapterId;
-    g.header.id = t.id;
 
-    if (!DisplayConfigGetDeviceInfo(&g.header)) {
-        DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
-        s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-        s.header.size = sizeof(s);
-        s.header.adapterId = t.adapterId;
-        s.header.id = t.id;
-        s.enableAdvancedColor = !g.advancedColorEnabled;
-        DisplayConfigSetDeviceInfo(&s.header);
+    for (UINT32 i = 0; i < pc; ++i) {
+        g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+        g.header.size = sizeof(g);
+        g.header.adapterId = p[i].targetInfo.adapterId;
+        g.header.id = p[i].targetInfo.id;
+
+        if (!DisplayConfigGetDeviceInfo(&g.header) &&
+            g.advancedColorSupported) {
+            target = &p[i].targetInfo;
+            break;
+        }
     }
+
+    if (!target)
+        goto cleanup;
+
+    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
+    s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+    s.header.size = sizeof(s);
+    s.header.adapterId = target->adapterId;
+    s.header.id = target->id;
+    s.enableAdvancedColor = !g.advancedColorEnabled;
+
+    DisplayConfigSetDeviceInfo(&s.header);
 
     ShellExecuteW(nullptr,
                   L"open",
@@ -54,9 +77,10 @@ void ToggleHDR()
                   nullptr,
                   SW_SHOWMINNOACTIVE);
 
-    Sleep(200);
+    Sleep(1200);
     EnumWindows(CloseSettings, 0);
 
+cleanup:
     delete[] p;
     delete[] m;
 }
