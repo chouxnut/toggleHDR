@@ -52,7 +52,7 @@ void ToggleHDR()
     }
 
     ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWMINNOACTIVE);
-    Sleep(500);
+    Sleep(2000);
     EnumWindows(CloseSettings, 0);
 }
 
