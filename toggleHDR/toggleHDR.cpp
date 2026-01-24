@@ -1,68 +1,46 @@
 #include <windows.h>
 #include <shellapi.h>
+#include <vector>
 
-#pragma comment(lib, "User32.lib")
-#pragma comment(lib, "Shell32.lib")
+#pragma comment(lib,"User32.lib")
+#pragma comment(lib,"Shell32.lib")
 
-static BOOL CALLBACK CloseSettings(HWND h, LPARAM)
+DWORD pid;
+
+BOOL CALLBACK CW(HWND h, LPARAM)
 {
-    wchar_t c[64];
-    GetClassNameW(h, c, 64);
-
-    if (!wcscmp(c, L"ApplicationFrameWindow")) {
-        PostMessageW(h, WM_CLOSE, 0, 0);
-        return FALSE;
-    }
+    DWORD p; 
+    GetWindowThreadProcessId(h, &p);
+    if (p == pid) PostMessageW(h, WM_CLOSE, 0, 0);
     return TRUE;
-}
-
-void ToggleHDR()
-{
-    UINT32 pc = 0, mc = 0;
-
-    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
-        return;
-
-    auto* p = new DISPLAYCONFIG_PATH_INFO[pc];
-    auto* m = new DISPLAYCONFIG_MODE_INFO[mc];
-
-    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p, &mc, m, nullptr))
-        return;
-
-    auto& t = p[0].targetInfo;
-
-    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
-    g.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-    g.header.size = sizeof(g);
-    g.header.adapterId = t.adapterId;
-    g.header.id = t.id;
-
-    if (!DisplayConfigGetDeviceInfo(&g.header)) {
-        DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
-        s.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-        s.header.size = sizeof(s);
-        s.header.adapterId = t.adapterId;
-        s.header.id = t.id;
-        s.enableAdvancedColor = !g.advancedColorEnabled;
-        DisplayConfigSetDeviceInfo(&s.header);
-    }
-
-    ShellExecuteW(nullptr,
-                  L"open",
-                  L"ms-settings:display",
-                  nullptr,
-                  nullptr,
-                  SW_SHOWMINNOACTIVE);
-
-    Sleep(500);
-    EnumWindows(CloseSettings, 0);
-
-    delete[] p;
-    delete[] m;
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    ToggleHDR();
-    return 0;
+    UINT32 pc = 0, mc = 0;
+    GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc);
+
+    std::vector<DISPLAYCONFIG_PATH_INFO> p(pc);
+    std::vector<DISPLAYCONFIG_MODE_INFO> m(mc);
+    QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p.data(), &mc, m.data(), 0);
+
+    auto& t = p[0].targetInfo;
+
+    DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{};
+    g.header = { DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO, sizeof(g), t.adapterId, t.id };
+    DisplayConfigGetDeviceInfo(&g.header);
+
+    DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{};
+    s.header = { DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE, sizeof(s), t.adapterId, t.id };
+    s.enableAdvancedColor = !g.advancedColorEnabled;
+    DisplayConfigSetDeviceInfo(&s.header);
+
+    SHELLEXECUTEINFOW e{ sizeof(e), SEE_MASK_NOCLOSEPROCESS };
+    e.lpFile = L"ms-settings:display";
+    ShellExecuteExW(&e);
+
+    pid = GetProcessId(e.hProcess);
+    WaitForInputIdle(e.hProcess, 3000);
+    EnumWindows(CW, 0);
+    CloseHandle(e.hProcess);
 }
