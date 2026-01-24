@@ -9,7 +9,7 @@ DWORD pid;
 
 BOOL CALLBACK CW(HWND h, LPARAM)
 {
-    DWORD p; 
+    DWORD p;
     GetWindowThreadProcessId(h, &p);
     if (p == pid) PostMessageW(h, WM_CLOSE, 0, 0);
     return TRUE;
@@ -36,7 +36,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     DisplayConfigSetDeviceInfo(&s.header);
 
     SHELLEXECUTEINFOW e{ sizeof(e), SEE_MASK_NOCLOSEPROCESS };
+    e.lpVerb = L"open";
     e.lpFile = L"ms-settings:display";
+    e.nShow = SW_SHOWMINNOACTIVE;
     ShellExecuteExW(&e);
 
     pid = GetProcessId(e.hProcess);
