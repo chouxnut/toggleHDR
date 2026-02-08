@@ -1,17 +1,19 @@
 #include <windows.h>
-#include <shobjidl.h>
+#include <shellapi.h>
 #include <vector>
 
 #pragma comment(lib,"User32.lib")
-#pragma comment(lib,"Ole32.lib")
+#pragma comment(lib,"Shell32.lib")
 
-DWORD pid;
+DWORD spid;
 
 BOOL CALLBACK C(HWND h, LPARAM)
 {
-    DWORD p;
-    GetWindowThreadProcessId(h, &p);
-    if (p == pid) PostMessageW(h, WM_CLOSE, 0, 0);
+    DWORD pid;
+    wchar_t c[32];
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == spid && GetClassNameW(h, c, 32) && !wcscmp(c, L"ApplicationFrameWindow"))
+        PostMessageW(h, WM_CLOSE, 0, 0);
     return TRUE;
 }
 
@@ -38,24 +40,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         DisplayConfigSetDeviceInfo(&s.header);
     }
 
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    SHELLEXECUTEINFOW e{ sizeof(e) };
+    e.lpVerb = L"open";
+    e.lpFile = L"ms-settings:display";
+    e.fMask = SEE_MASK_NOCLOSEPROCESS;
+    e.nShow = SW_SHOWMINNOACTIVE;
+    ShellExecuteExW(&e);
 
-    IApplicationActivationManager* a;
-    if (SUCCEEDED(CoCreateInstance(
-        CLSID_ApplicationActivationManager, nullptr,
-        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&a))))
-    {
-        a->ActivateApplication(
-            L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel",
-            L"page=display", AO_NONE, &pid);
-        a->Release();
-    }
+    spid = GetProcessId(e.hProcess);
 
-    for (int i = 0; i < 20; i++) {
-        EnumWindows(C, 0);
-        Sleep(25);
-    }
-
-    CoUninitialize();
-    return 0;
+    Sleep(600);
+    EnumWindows(C, 0);
 }
