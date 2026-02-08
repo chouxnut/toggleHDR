@@ -7,23 +7,25 @@
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
-HWINEVENTHOOK hook;
+HWINEVENTHOOK h;
 
-void CALLBACK E(HWINEVENTHOOK, DWORD e, HWND h, LONG, LONG, DWORD, DWORD)
+void CALLBACK W(
+    HWINEVENTHOOK, DWORD e, HWND w, LONG, LONG, DWORD, DWORD)
 {
-    if (e != EVENT_OBJECT_CREATE || !IsWindow(h)) return;
+    if (e != EVENT_OBJECT_SHOW || !IsWindow(w)) return;
 
     wchar_t c[32];
-    if (!GetClassNameW(h, c, 32) || wcscmp(c, L"ApplicationFrameWindow")) return;
+    if (!GetClassNameW(w, c, 32) || wcscmp(c, L"ApplicationFrameWindow")) return;
 
     IPropertyStore* s;
-    if (SUCCEEDED(SHGetPropertyStoreForWindow(h, IID_PPV_ARGS(&s)))) {
+    if (SUCCEEDED(SHGetPropertyStoreForWindow(w, IID_PPV_ARGS(&s)))) {
         PROPVARIANT v;
         PropVariantInit(&v);
         if (SUCCEEDED(s->GetValue(PKEY_AppUserModel_ID, &v)) &&
             v.vt == VT_LPWSTR &&
-            !wcscmp(v.pwszVal, L"windows.immersivecontrolpanel_cw5n1h2txyewy"))
-            PostMessageW(h, WM_CLOSE, 0, 0);
+            !wcscmp(v.pwszVal,
+              L"windows.immersivecontrolpanel_cw5n1h2txyewy"))
+            PostMessageW(w, WM_CLOSE, 0, 0);
         PropVariantClear(&v);
         s->Release();
     }
@@ -31,9 +33,9 @@ void CALLBACK E(HWINEVENTHOOK, DWORD e, HWND h, LONG, LONG, DWORD, DWORD)
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    hook = SetWinEventHook(
-        EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE,
-        nullptr, E, 0, 0,
+    h = SetWinEventHook(
+        EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW,
+        nullptr, W, 0, 0,
         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
     UINT32 pc = 0, mc = 0;
@@ -59,6 +61,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
     ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWMINNOACTIVE);
 
-    Sleep(2000);
-    UnhookWinEvent(hook);
+    MSG msg;
+    DWORD end = GetTickCount() + 3000;
+    while (GetTickCount() < end && GetMessageW(&msg, nullptr, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    UnhookWinEvent(h);
 }
