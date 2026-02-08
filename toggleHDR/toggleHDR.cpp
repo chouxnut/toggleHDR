@@ -1,18 +1,26 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <vector>
+#include <propkey.h>
+#include <propvarutil.h>
+#include <shobjidl.h>
 
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
 BOOL CALLBACK C(HWND h, LPARAM)
 {
-    wchar_t c[32], t[64];
-    if (GetClassNameW(h, c, 32) &&
-        !wcscmp(c, L"ApplicationFrameWindow") &&
-        GetWindowTextW(h, t, 64) &&
-        (wcsstr(t, L"설정") || wcsstr(t, L"Settings")))
-        PostMessageW(h, WM_CLOSE, 0, 0);
+    IPropertyStore* s;
+    if (SUCCEEDED(SHGetPropertyStoreForWindow(h, IID_PPV_ARGS(&s)))) {
+        PROPVARIANT v;
+        PropVariantInit(&v);
+        if (SUCCEEDED(s->GetValue(PKEY_AppUserModel_ID, &v)) &&
+            v.vt == VT_LPWSTR &&
+            !wcscmp(v.pwszVal, L"windows.immersivecontrolpanel_cw5n1h2txyewy"))
+            PostMessageW(h, WM_CLOSE, 0, 0);
+        PropVariantClear(&v);
+        s->Release();
+    }
     return TRUE;
 }
 
