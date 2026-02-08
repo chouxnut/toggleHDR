@@ -5,14 +5,13 @@
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
-DWORD spid;
-
 BOOL CALLBACK C(HWND h, LPARAM)
 {
-    DWORD pid;
-    wchar_t c[32];
-    GetWindowThreadProcessId(h, &pid);
-    if (pid == spid && GetClassNameW(h, c, 32) && !wcscmp(c, L"ApplicationFrameWindow"))
+    wchar_t c[32], t[64];
+    if (GetClassNameW(h, c, 32) &&
+        !wcscmp(c, L"ApplicationFrameWindow") &&
+        GetWindowTextW(h, t, 64) &&
+        (wcsstr(t, L"설정") || wcsstr(t, L"Settings")))
         PostMessageW(h, WM_CLOSE, 0, 0);
     return TRUE;
 }
@@ -40,15 +39,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         DisplayConfigSetDeviceInfo(&s.header);
     }
 
-    SHELLEXECUTEINFOW e{ sizeof(e) };
-    e.lpVerb = L"open";
-    e.lpFile = L"ms-settings:display";
-    e.fMask = SEE_MASK_NOCLOSEPROCESS;
-    e.nShow = SW_SHOWMINNOACTIVE;
-    ShellExecuteExW(&e);
-
-    spid = GetProcessId(e.hProcess);
-
+    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWMINNOACTIVE);
     Sleep(600);
     EnumWindows(C, 0);
 }
