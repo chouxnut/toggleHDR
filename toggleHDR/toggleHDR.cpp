@@ -51,9 +51,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         a->Release();
     }
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         EnumWindows(C, 0);
-        Sleep(100);
+        Sleep(25);
     }
 
     CoUninitialize();
