@@ -1,15 +1,21 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <vector>
-#include <propkey.h>
-#include <propvarutil.h>
 #include <shobjidl.h>
+#include <propkey.h>
 
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
-BOOL CALLBACK C(HWND h, LPARAM)
+HWINEVENTHOOK hook;
+
+void CALLBACK E(HWINEVENTHOOK, DWORD e, HWND h, LONG, LONG, DWORD, DWORD)
 {
+    if (e != EVENT_OBJECT_CREATE || !IsWindow(h)) return;
+
+    wchar_t c[32];
+    if (!GetClassNameW(h, c, 32) || wcscmp(c, L"ApplicationFrameWindow")) return;
+
     IPropertyStore* s;
     if (SUCCEEDED(SHGetPropertyStoreForWindow(h, IID_PPV_ARGS(&s)))) {
         PROPVARIANT v;
@@ -21,17 +27,21 @@ BOOL CALLBACK C(HWND h, LPARAM)
         PropVariantClear(&v);
         s->Release();
     }
-    return TRUE;
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
+    hook = SetWinEventHook(
+        EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE,
+        nullptr, E, 0, 0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+
     UINT32 pc = 0, mc = 0;
-    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc)) return 0;
+    GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc);
 
     std::vector<DISPLAYCONFIG_PATH_INFO> p(pc);
     std::vector<DISPLAYCONFIG_MODE_INFO> m(mc);
-    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p.data(), &mc, m.data(), nullptr)) return 0;
+    QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p.data(), &mc, m.data(), nullptr);
 
     auto& t = p[0].targetInfo;
 
@@ -48,6 +58,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     }
 
     ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWMINNOACTIVE);
-    Sleep(600);
-    EnumWindows(C, 0);
+
+    Sleep(2000);
+    UnhookWinEvent(hook);
 }
