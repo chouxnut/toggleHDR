@@ -5,6 +5,17 @@
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
+DWORD targetPid = 0;
+
+BOOL CALLBACK CloseByPid(HWND h, LPARAM)
+{
+    DWORD pid;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == targetPid && IsWindowVisible(h))
+        PostMessageW(h, WM_CLOSE, 0, 0);
+    return TRUE;
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
     UINT32 pc = 0, mc = 0;
@@ -28,12 +39,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         DisplayConfigSetDeviceInfo(&s.header);
     }
 
-    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
+    SHELLEXECUTEINFOW se{ sizeof(se) };
+    se.fMask = SEE_MASK_NOCLOSEPROCESS;
+    se.lpVerb = L"open";
+    se.lpFile = L"ms-settings:display";
+    se.nShow = SW_SHOWNORMAL;
 
-    Sleep(1200);
-
-    HWND h = FindWindowW(L"ApplicationFrameWindow", L"설정");
-    if (h) PostMessageW(h, WM_CLOSE, 0, 0);
+    if (ShellExecuteExW(&se) && se.hProcess) {
+        targetPid = GetProcessId(se.hProcess);
+        Sleep(1200);
+        EnumWindows(CloseByPid, 0);
+        CloseHandle(se.hProcess);
+    }
 
     return 0;
 }
