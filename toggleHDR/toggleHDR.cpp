@@ -22,7 +22,7 @@ int WINAPI WinMain(HINSTANCE,HINSTANCE,LPSTR,int){
     }
 
     ShellExecuteW(nullptr,L"open",L"ms-settings:display",nullptr,nullptr,SW_SHOWNORMAL);
-    Sleep(600);
+    Sleep(500);
 
     STARTUPINFOW si{}; PROCESS_INFORMATION pi{};
     si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=SW_HIDE;
