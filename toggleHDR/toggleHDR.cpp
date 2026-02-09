@@ -5,14 +5,6 @@
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
-BOOL CALLBACK C(HWND h, LPARAM)
-{
-    wchar_t c[32];
-    if (GetClassNameW(h, c, 32) && !wcscmp(c, L"ApplicationFrameWindow"))
-        PostMessageW(h, WM_CLOSE, 0, 0);
-    return TRUE;
-}
-
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
     UINT32 pc = 0, mc = 0;
@@ -36,8 +28,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         DisplayConfigSetDeviceInfo(&s.header);
     }
 
-    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWMINNOACTIVE);
-    Sleep(600);
-    EnumWindows(C, 0);
+    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
+
+    Sleep(1200);
+
+    HWND h = FindWindowW(L"ApplicationFrameWindow", L"설정");
+    if (h) PostMessageW(h, WM_CLOSE, 0, 0);
+
     return 0;
 }
