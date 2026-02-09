@@ -28,21 +28,17 @@ void KillSystemSettingsSilently()
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    // 1️⃣ 먼저 설정창 열기 (아직 화면 정상)
-    ShellExecuteW(nullptr, L"open", L"ms-settings:display",
-                  nullptr, nullptr, SW_SHOWNORMAL);
-
-    Sleep(300); // 창 생성만 되면 충분
-
-    // 2️⃣ HDR 토글
-    UINT32 pc = 0, mc = 0;
-    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc))
+    // --------------------------
+    // 1️⃣ HDR 토글
+    // --------------------------
+    UINT32 pathCount = 0, modeCount = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount))
         return 0;
 
-    DISPLAYCONFIG_PATH_INFO* paths = new DISPLAYCONFIG_PATH_INFO[pc];
-    DISPLAYCONFIG_MODE_INFO* modes = new DISPLAYCONFIG_MODE_INFO[mc];
+    DISPLAYCONFIG_PATH_INFO* paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+    DISPLAYCONFIG_MODE_INFO* modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
 
-    if (!QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths, &mc, modes, nullptr))
+    if (!QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths, &modeCount, modes, nullptr))
     {
         const auto& t = paths[0].targetInfo;
 
@@ -61,16 +57,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             s.header.id = t.id;
             s.enableAdvancedColor = !g.advancedColorEnabled;
 
-            // 🔴 여기서 화면 OFF
+            // 🔴 이 순간 모니터가 꺼짐 (HDR 토글)
             DisplayConfigSetDeviceInfo(&s.header);
         }
     }
 
-    // 3️⃣ 화면 블랙 타임
-    Sleep(1200);
+    // --------------------------
+    // 2️⃣ 화면 블랙 타임
+    // --------------------------
+    Sleep(800); // 블랙 타임 확보 (환경에 따라 700~1200ms 조절)
 
-    // 4️⃣ 이 동안 설정 앱 제거
-    KillSystemSettingsSilently();
+    // --------------------------
+    // 3️⃣ 설정창 열기 + 바로 닫기
+    // --------------------------
+    ShellExecuteW(nullptr, L"open", L"ms-settings:display",
+                  nullptr, nullptr, SW_SHOWNORMAL);
+    Sleep(300); // 창이 열리기만 하면 충분
+
+    KillSystemSettingsSilently(); // 설정창 제거
 
     delete[] paths;
     delete[] modes;
