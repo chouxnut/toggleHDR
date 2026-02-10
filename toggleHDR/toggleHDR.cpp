@@ -22,7 +22,7 @@ bool ToggleHDR(){
 }
 
 void RefreshSettingsApp(){
-    ShellExecuteW(nullptr,L"ms-settings:display",nullptr,nullptr,SW_SHOWNORMAL);
+    ShellExecuteW(nullptr,L"open",L"ms-settings:display",nullptr,nullptr,SW_SHOWNORMAL);
     Sleep(500);
     STARTUPINFOW si{sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=SW_HIDE;
     PROCESS_INFORMATION pi{};
