@@ -1,82 +1,42 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <vector>
-#include <tlhelp32.h>
 
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Shell32.lib")
 
-DWORD find_pid(const wchar_t* name) {
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) return 0;
-
-    PROCESSENTRY32W pe{ sizeof(pe) };
-    for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe)) {
-        if (!_wcsicmp(pe.szExeFile, name)) {
-            CloseHandle(snap);
-            return pe.th32ProcessID;
-        }
-    }
-
-    CloseHandle(snap);
-    return 0;
-}
-
-bool process_exists(const wchar_t* name) {
-    return find_pid(name) != 0;
-}
-
-void trigger_settings_pipeline() {
-    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
-
-    constexpr DWORD timeout = 3000;
-    constexpr DWORD interval = 20;
-
-    bool ui_ready = false;
-
-    for (DWORD t = 0; t < timeout; t += interval) {
-        if (!ui_ready && process_exists(L"ApplicationFrameHost.exe"))
-            ui_ready = true;
-
-        if (ui_ready) {
-            if (DWORD pid = find_pid(L"SystemSettings.exe")) {
-                if (HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid)) {
-                    TerminateProcess(h, 0);
-                    CloseHandle(h);
-                }
-                break;
-            }
-        }
-        Sleep(interval);
-    }
-}
-
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     UINT32 pc = 0, mc = 0;
-    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc) != ERROR_SUCCESS || pc == 0)
-        return 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pc, &mc) || !pc) return 0;
 
-    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pc);
-    std::vector<DISPLAYCONFIG_MODE_INFO> modes(mc);
+    std::vector<DISPLAYCONFIG_PATH_INFO> p(pc);
+    std::vector<DISPLAYCONFIG_MODE_INFO> m(mc);
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, p.data(), &mc, m.data(), nullptr)) return 0;
 
-    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pc, paths.data(), &mc, modes.data(), nullptr) != ERROR_SUCCESS)
-        return 0;
-
-    const auto& t = paths[0].targetInfo;
+    const auto& t = p[0].targetInfo;
 
     DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO g{
         { DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO, sizeof(g), t.adapterId, t.id }
     };
-
-    if (DisplayConfigGetDeviceInfo(&g.header) != ERROR_SUCCESS || !g.advancedColorSupported)
-        return 0;
+    if (DisplayConfigGetDeviceInfo(&g.header)) return 0;
 
     DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE s{
         { DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE, sizeof(s), t.adapterId, t.id },
         !g.advancedColorEnabled
     };
-
     DisplayConfigSetDeviceInfo(&s.header);
-    trigger_settings_pipeline();
+
+    ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
+    Sleep(500);
+
+    STARTUPINFOW si{ sizeof(si), nullptr, nullptr, nullptr, 0,0,0,0,0,0, STARTF_USESHOWWINDOW, SW_HIDE };
+    PROCESS_INFORMATION pi{};
+    wchar_t cmd[] = L"taskkill /IM SystemSettings.exe /F";
+
+    if (CreateProcessW(nullptr, cmd, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, 3000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
     return 0;
 }
