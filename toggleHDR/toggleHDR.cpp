@@ -3,17 +3,16 @@
 #include <vector>
 #include <tlhelp32.h>
 
-#pragma comment(lib, "User32.lib")
-#pragma comment(lib, "Shell32.lib")
+#pragma comment(lib,"User32.lib")
+#pragma comment(lib,"Shell32.lib")
 
-DWORD find_settings_pid() {
+DWORD find_pid(const wchar_t* name) {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE)
-        return 0;
+    if (snap == INVALID_HANDLE_VALUE) return 0;
 
     PROCESSENTRY32W pe{ sizeof(pe) };
     for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe)) {
-        if (!_wcsicmp(pe.szExeFile, L"SystemSettings.exe")) {
+        if (!_wcsicmp(pe.szExeFile, name)) {
             CloseHandle(snap);
             return pe.th32ProcessID;
         }
@@ -23,19 +22,30 @@ DWORD find_settings_pid() {
     return 0;
 }
 
-void open_and_close_settings() {
+bool process_exists(const wchar_t* name) {
+    return find_pid(name) != 0;
+}
+
+void trigger_settings_pipeline() {
     ShellExecuteW(nullptr, L"open", L"ms-settings:display", nullptr, nullptr, SW_SHOWNORMAL);
 
     constexpr DWORD timeout = 3000;
     constexpr DWORD interval = 20;
 
+    bool ui_ready = false;
+
     for (DWORD t = 0; t < timeout; t += interval) {
-        if (DWORD pid = find_settings_pid()) {
-            if (HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid)) {
-                TerminateProcess(h, 0);
-                CloseHandle(h);
+        if (!ui_ready && process_exists(L"ApplicationFrameHost.exe"))
+            ui_ready = true;
+
+        if (ui_ready) {
+            if (DWORD pid = find_pid(L"SystemSettings.exe")) {
+                if (HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, pid)) {
+                    TerminateProcess(h, 0);
+                    CloseHandle(h);
+                }
+                break;
             }
-            break;
         }
         Sleep(interval);
     }
@@ -67,6 +77,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     };
 
     DisplayConfigSetDeviceInfo(&s.header);
-    open_and_close_settings();
+    trigger_settings_pipeline();
     return 0;
 }
